@@ -35,9 +35,6 @@ namespace SoulsLike.Enemy
         public float staggerDuration = 0.6f;
 
         [Header("Parry / Riposte")]
-        [Tooltip("How long this enemy stays exposed (extended stagger) after having an attack " +
-                 "parried by the player - WeaponSystem checks IsRiposteVulnerable during this " +
-                 "window to award bonus damage.")]
         public float riposteVulnerableDuration = 2.5f;
         public bool IsRiposteVulnerable { get; private set; }
 
@@ -233,8 +230,6 @@ namespace SoulsLike.Enemy
             if (player == null) return;
             if (Vector3.Distance(transform.position, player.position) > attackRange * 1.2f) return;
 
-            // Give the player a chance to parry before any damage lands - a successful parry
-            // negates the hit entirely and leaves this enemy exposed instead.
             var playerController = player.GetComponentInParent<PlayerController>();
             if (playerController != null && playerController.TryConsumeParry(gameObject))
             {
@@ -246,8 +241,6 @@ namespace SoulsLike.Enemy
             playerHealth?.ApplyDamage(attackDamage);
         }
 
-        /// <summary>Called when the player successfully parries this enemy's attack - opens an
-        /// extended vulnerability window (see IsRiposteVulnerable) instead of dealing damage.</summary>
         public void GetParried()
         {
             IsRiposteVulnerable = true;

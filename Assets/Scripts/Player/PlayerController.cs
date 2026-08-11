@@ -39,9 +39,6 @@ namespace SoulsLike.Player
         public LayerMask hittableLayers;
 
         [Header("Parry")]
-        [Tooltip("Press just before an enemy attack lands. A successful parry negates the hit " +
-                 "entirely and leaves the attacker exposed (see EnemyAI.IsRiposteVulnerable) " +
-                 "instead of dealing damage.")]
         public KeyCode parryKey = KeyCode.Q;
         public float parryWindowDuration = 0.25f;
         public float parryStaminaCost = 10f;
@@ -205,15 +202,12 @@ namespace SoulsLike.Player
             lastParryTime = Time.time;
         }
 
-        /// <summary>Called by an attacker's damage-dealing code (see EnemyAI.DealDamageIfInRange)
-        /// before applying damage. If a parry window is currently active, consumes it (one-shot)
-        /// and returns true - the caller should treat the hit as parried (no damage, and expose
-        /// itself as riposte-vulnerable) instead of dealing damage.</summary>
+        // Called by an attacker before applying damage - consumes an active parry window and
+        // returns true if the hit should be negated instead of landing.
         public bool TryConsumeParry(GameObject attacker)
         {
             if (!parryWindowActive) return false;
             parryWindowActive = false;
-            Debug.Log($"[PlayerController] Parried {(attacker != null ? attacker.name : "an attack")}!");
             return true;
         }
 
