@@ -104,3 +104,11 @@ InitTestScene*.unity*
 
 # Auto-generated cache in Assets folder
 /[Aa]ssets/[Ss]ceneDependencyCache*
+
+# Backup files created during editor tooling work - not real project content
+*.bak
+*.backup
+*.backup.meta
+
+# GUID-keyed generated asset cache
+/GeneratedAssets/

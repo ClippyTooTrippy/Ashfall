@@ -67,8 +67,10 @@ namespace SoulsLike.CameraSystem
             Vector3 dir = midpoint - target.position;
             if (dir.sqrMagnitude < 0.001f) return;
 
-            // Look from behind the player toward the midpoint between player and target.
-            Vector3 flatDir = target.position - lockOn.CurrentTarget.position;
+            // Look from behind the player toward the midpoint between player and target -
+            // direction FROM player TO the target, not the other way around (that was the
+            // bug: subtracted backwards, so the camera faced away from the locked enemy).
+            Vector3 flatDir = lockOn.CurrentTarget.position - target.position;
             flatDir.y = 0f;
             if (flatDir.sqrMagnitude < 0.001f) return;
 

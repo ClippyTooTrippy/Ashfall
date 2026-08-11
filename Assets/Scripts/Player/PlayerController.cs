@@ -38,11 +38,27 @@ namespace SoulsLike.Player
         public float heavyAttackDamage = 34f;
         public LayerMask hittableLayers;
 
+        [Header("Parry")]
+        [Tooltip("Press just before an enemy attack lands. A successful parry negates the hit " +
+                 "entirely and leaves the attacker exposed (see EnemyAI.IsRiposteVulnerable) " +
+                 "instead of dealing damage.")]
+        public KeyCode parryKey = KeyCode.Q;
+        public float parryWindowDuration = 0.25f;
+        public float parryStaminaCost = 10f;
+        public float parryCooldown = 0.6f;
+
         public ActionState State { get; private set; } = ActionState.Free;
+
+        // Public properties for weapon system to check attack state and timing
+        public bool IsAttacking => State == ActionState.Attacking;
+        public bool IsInAttackDamageWindow => damageWindowOpen && actionTimer > 0f && actionTimer <= attackDuration;
+        public float GetAttackDamage() => pendingAttackDamage;
 
         private CharacterController controller;
         private Health health;
         private Stamina stamina;
+        private Animator animator;
+        private WeaponSystem weaponSystem;
 
         private Vector3 velocity;
         private float actionTimer;
@@ -50,11 +66,17 @@ namespace SoulsLike.Player
         private bool damageWindowOpen;
         private float pendingAttackDamage;
 
+        private bool parryWindowActive;
+        private float parryTimer;
+        private float lastParryTime = -999f;
+
         private void Awake()
         {
             controller = GetComponent<CharacterController>();
             health = GetComponent<Health>();
             stamina = GetComponent<Stamina>();
+            animator = GetComponentInChildren<Animator>();
+            weaponSystem = GetComponentInChildren<WeaponSystem>();
 
             if (cameraTransform == null && Camera.main != null)
                 cameraTransform = Camera.main.transform;
@@ -70,14 +92,16 @@ namespace SoulsLike.Player
 
             TickActionTimer();
 
+            Vector3 horizontalMove = Vector3.zero;
+
             switch (State)
             {
                 case ActionState.Free:
-                    HandleFreeMovement();
+                    horizontalMove = GetFreeMovement();
                     HandleActionInput();
                     break;
                 case ActionState.Rolling:
-                    ApplyRollMotion();
+                    horizontalMove = GetRollMotion();
                     break;
                 case ActionState.Attacking:
                     // Root motion is faked with a small forward nudge; replace with animation root motion when available.
@@ -85,12 +109,20 @@ namespace SoulsLike.Player
                     break;
             }
 
+            if (animator != null)
+            {
+                float targetSpeed = State == ActionState.Free ? horizontalMove.magnitude : 0f;
+                animator.SetFloat("Speed", targetSpeed, 0.08f, Time.deltaTime);
+            }
+
             ApplyGravity();
+            Vector3 totalMove = horizontalMove + velocity;
+            controller.Move(totalMove * Time.deltaTime);
         }
 
         // ---------- Movement ----------
 
-        private void HandleFreeMovement()
+        private Vector3 GetFreeMovement()
         {
             Vector2 input = new Vector2(Input.GetAxisRaw("Horizontal"), Input.GetAxisRaw("Vertical"));
             bool isRunning = Input.GetKey(KeyCode.LeftShift) && input.sqrMagnitude > 0.01f;
@@ -102,8 +134,6 @@ namespace SoulsLike.Player
 
             float speed = isRunning ? runSpeed : walkSpeed;
             Vector3 horizontalMove = moveDir * speed;
-
-            controller.Move(horizontalMove * Time.deltaTime);
 
             bool locked = lockOn != null && lockOn.HasTarget;
             if (locked)
@@ -117,6 +147,8 @@ namespace SoulsLike.Player
             {
                 FaceDirection(moveDir);
             }
+
+            return horizontalMove;
         }
 
         private void FaceDirection(Vector3 dir)
@@ -128,11 +160,13 @@ namespace SoulsLike.Player
         private void ApplyGravity()
         {
             if (controller.isGrounded && velocity.y < 0)
+            {
                 velocity.y = -2f;
+            }
             else
+            {
                 velocity.y += gravity * Time.deltaTime;
-
-            controller.Move(new Vector3(0f, velocity.y, 0f) * Time.deltaTime);
+            }
         }
 
         // ---------- Actions ----------
@@ -142,6 +176,11 @@ namespace SoulsLike.Player
             if (Input.GetKeyDown(KeyCode.Space))
             {
                 TryStartRoll();
+                return;
+            }
+            if (Input.GetKeyDown(parryKey))
+            {
+                TryStartParry();
                 return;
             }
             if (Input.GetMouseButtonDown(0))
@@ -154,6 +193,28 @@ namespace SoulsLike.Player
                 TryStartAttack(heavyAttackDamage, heavyAttackStaminaCost, heavyAttackDuration);
                 return;
             }
+        }
+
+        private void TryStartParry()
+        {
+            if (Time.time - lastParryTime < parryCooldown) return;
+            if (!stamina.TrySpend(parryStaminaCost)) return;
+
+            parryWindowActive = true;
+            parryTimer = parryWindowDuration;
+            lastParryTime = Time.time;
+        }
+
+        /// <summary>Called by an attacker's damage-dealing code (see EnemyAI.DealDamageIfInRange)
+        /// before applying damage. If a parry window is currently active, consumes it (one-shot)
+        /// and returns true - the caller should treat the hit as parried (no damage, and expose
+        /// itself as riposte-vulnerable) instead of dealing damage.</summary>
+        public bool TryConsumeParry(GameObject attacker)
+        {
+            if (!parryWindowActive) return false;
+            parryWindowActive = false;
+            Debug.Log($"[PlayerController] Parried {(attacker != null ? attacker.name : "an attack")}!");
+            return true;
         }
 
         private void TryStartRoll()
@@ -172,9 +233,12 @@ namespace SoulsLike.Player
 
             State = ActionState.Rolling;
             actionTimer = 0f;
+
+            if (animator != null)
+                animator.SetTrigger("Roll");
         }
 
-        private void ApplyRollMotion()
+        private Vector3 GetRollMotion()
         {
             actionTimer += Time.deltaTime;
 
@@ -182,15 +246,15 @@ namespace SoulsLike.Player
             health.SetInvulnerable(inIFrameWindow);
 
             // Speed curve: fast burst, tapering toward the end of the roll.
-            float t = actionTimer / rollDuration;
+            // rollDuration is now just a fallback/tuning reference for the curve
+            // shape - the actual state exit is driven by ActionStateNotifier,
+            // which fires OnAnimatorActionComplete() when the Animator's own
+            // Roll -> Locomotion exit transition kicks in.
+            float t = Mathf.Clamp01(actionTimer / rollDuration);
             float speedMul = Mathf.Lerp(1f, 0.2f, t);
-            controller.Move(rollDirection * rollSpeed * speedMul * Time.deltaTime);
+            Vector3 move = rollDirection * rollSpeed * speedMul;
 
-            if (actionTimer >= rollDuration)
-            {
-                health.SetInvulnerable(false);
-                State = ActionState.Free;
-            }
+            return move;
         }
 
         private void TryStartAttack(float damage, float staminaCost, float duration)
@@ -202,6 +266,9 @@ namespace SoulsLike.Player
             pendingAttackDamage = damage;
             damageWindowOpen = false;
             attackDuration = duration;
+
+            if (animator != null)
+                animator.SetTrigger("Attack");
         }
 
         private float attackDuration;
@@ -211,17 +278,43 @@ namespace SoulsLike.Player
             actionTimer += Time.deltaTime;
 
             // Damage lands in the middle third of the swing - tune per animation later.
+            // (Consider replacing this with an Animation Event on the clip itself
+            // once you're happy with the timing, for frame-perfect accuracy.)
             float windowStart = attackDuration * 0.35f;
             float windowEnd = attackDuration * 0.55f;
 
             if (!damageWindowOpen && actionTimer >= windowStart && actionTimer <= windowEnd)
             {
                 damageWindowOpen = true;
-                DealDamageInFront();
+                // Enable weapon collider for hit detection during attack window
+                if (weaponSystem != null)
+                {
+                    // WeaponSystem will handle enabling its own collider based on attack state
+                }
             }
 
-            if (actionTimer >= attackDuration)
+            // State exit is now driven by ActionStateNotifier calling
+            // OnAnimatorActionComplete() when the Attack -> Locomotion
+            // transition begins in the Animator, instead of a hardcoded timer.
+        }
+
+        /// <summary>
+        /// Called by ActionStateNotifier (a StateMachineBehaviour attached to the
+        /// Roll and Attack states in the Animator) the instant that state's exit
+        /// transition actually begins. This replaces guessing durations in code -
+        /// the Animator is now the single source of truth for how long an action lasts.
+        /// </summary>
+        public void OnAnimatorActionComplete()
+        {
+            if (State == ActionState.Rolling)
+            {
+                health.SetInvulnerable(false);
+            }
+
+            if (State == ActionState.Rolling || State == ActionState.Attacking)
+            {
                 State = ActionState.Free;
+            }
         }
 
         private void DealDamageInFront()
@@ -242,7 +335,11 @@ namespace SoulsLike.Player
 
         private void TickActionTimer()
         {
-            // Reserved for future hit-stun / stagger handling.
+            if (parryWindowActive)
+            {
+                parryTimer -= Time.deltaTime;
+                if (parryTimer <= 0f) parryWindowActive = false;
+            }
         }
 
         private void OnDrawGizmosSelected()

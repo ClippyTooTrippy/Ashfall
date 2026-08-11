@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEngine.AI;
 using SoulsLike.Systems;
+using SoulsLike.Player;
 
 namespace SoulsLike.Enemy
 {
@@ -12,6 +13,7 @@ namespace SoulsLike.Enemy
 
         [Header("References")]
         public Transform player;
+        public Animator animator;
 
         [Header("Detection")]
         public float sightRange = 10f;
@@ -32,6 +34,13 @@ namespace SoulsLike.Enemy
         [Header("Stagger")]
         public float staggerDuration = 0.6f;
 
+        [Header("Parry / Riposte")]
+        [Tooltip("How long this enemy stays exposed (extended stagger) after having an attack " +
+                 "parried by the player - WeaponSystem checks IsRiposteVulnerable during this " +
+                 "window to award bonus damage.")]
+        public float riposteVulnerableDuration = 2.5f;
+        public bool IsRiposteVulnerable { get; private set; }
+
         public State CurrentState { get; private set; } = State.Idle;
 
         private NavMeshAgent agent;
@@ -40,10 +49,16 @@ namespace SoulsLike.Enemy
         private float stateTimer;
         private float lastAttackTime = -999f;
 
+        private static readonly int SpeedParam = Animator.StringToHash("Speed");
+        private static readonly int AttackTrigger = Animator.StringToHash("Attack");
+        private static readonly int HitTrigger = Animator.StringToHash("Hit");
+        private static readonly int DeathTrigger = Animator.StringToHash("Death");
+
         private void Awake()
         {
             agent = GetComponent<NavMeshAgent>();
             health = GetComponent<Health>();
+            if (animator == null) animator = GetComponentInChildren<Animator>();
 
             if (player == null)
             {
@@ -76,6 +91,17 @@ namespace SoulsLike.Enemy
                 case State.Attack: TickAttack(); break;
                 case State.Stagger: TickStagger(); break;
             }
+
+            UpdateAnimator();
+        }
+
+        private void UpdateAnimator()
+        {
+            if (animator == null) return;
+            float speed = CurrentState == State.Chase ? agent.speed
+                        : CurrentState == State.Patrol ? agent.speed * 0.5f
+                        : 0f;
+            animator.SetFloat(SpeedParam, speed);
         }
 
         // ---------- States ----------
@@ -159,8 +185,12 @@ namespace SoulsLike.Enemy
         {
             agent.isStopped = true;
             stateTimer += Time.deltaTime;
-            if (stateTimer >= staggerDuration)
+            float duration = IsRiposteVulnerable ? riposteVulnerableDuration : staggerDuration;
+            if (stateTimer >= duration)
+            {
+                IsRiposteVulnerable = false;
                 ChangeState(State.Chase);
+            }
         }
 
         // ---------- Helpers ----------
@@ -203,8 +233,25 @@ namespace SoulsLike.Enemy
             if (player == null) return;
             if (Vector3.Distance(transform.position, player.position) > attackRange * 1.2f) return;
 
+            // Give the player a chance to parry before any damage lands - a successful parry
+            // negates the hit entirely and leaves this enemy exposed instead.
+            var playerController = player.GetComponentInParent<PlayerController>();
+            if (playerController != null && playerController.TryConsumeParry(gameObject))
+            {
+                GetParried();
+                return;
+            }
+
             Health playerHealth = player.GetComponentInParent<Health>();
             playerHealth?.ApplyDamage(attackDamage);
+        }
+
+        /// <summary>Called when the player successfully parries this enemy's attack - opens an
+        /// extended vulnerability window (see IsRiposteVulnerable) instead of dealing damage.</summary>
+        public void GetParried()
+        {
+            IsRiposteVulnerable = true;
+            ChangeState(State.Stagger);
         }
 
         private void HandleDamaged(float amount)
@@ -229,6 +276,13 @@ namespace SoulsLike.Enemy
         {
             CurrentState = next;
             stateTimer = 0f;
+
+            if (animator != null)
+            {
+                if (next == State.Attack) animator.SetTrigger(AttackTrigger);
+                else if (next == State.Stagger) animator.SetTrigger(HitTrigger);
+                else if (next == State.Dead) animator.SetTrigger(DeathTrigger);
+            }
         }
 
         private void OnDrawGizmosSelected()

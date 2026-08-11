@@ -39,6 +39,7 @@ namespace SoulsLike.Systems
                 return false;
 
             currentHealth = Mathf.Max(0f, currentHealth - amount);
+            Debug.Log($"[Health] {gameObject.name} took {amount} damage -> {currentHealth}/{maxHealth}");
             OnDamaged?.Invoke(amount);
             OnHealthChanged?.Invoke(currentHealth, maxHealth);
 

@@ -239,7 +239,7 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!1 &598131796
+--- !u!1 --- !u!1 &598131796598131796\nGameObject:\n  m_ObjectHideFlags: 0\n  m_CorrespondingSourceObject: {fileID: 0}\n  m_PrefabInstance: {fileID: 598131796}\n  m_PrefabAsset: {fileID: 0}\n  serializedVersion: 6\n  m_Component:\n  - component: {fileID: 598131803}\n  - component: {fileID: 598131802}\n  - component: {fileID: 598131801}\n  - component: {fileID: 598131800}\n  - component: {fileID: 598131799}\n  - component: {fileID: 598131798}\n  - component: {fileID: 598131797}\n  m_Layer: 0\n  m_Name: Enemy_Basic\n  m_TagString: Enemy\n  m_Icon: {fileID: 0}\n  m_NavMeshLayer: 0\n  m_StaticEditorFlags: 0\n  m_IsActive: 1
 GameObject:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -419,7 +419,7 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!1 &605120302
+--- !u!1 --- !u!1 &605120302605120302\nGameObject:\n  m_ObjectHideFlags: 0\n  m_CorrespondingSourceObject: {fileID: 0}\n  m_PrefabInstance: {fileID: 468494001}\n  m_PrefabAsset: {fileID: 0}\n  serializedVersion: 6\n  m_Component:\n  - component: {fileID: 605120303}\n  - component: {fileID: 605120310}\n  - component: {fileID: 605120309}\n  - component: {fileID: 605120308}\n  - component: {fileID: 605120305}\n  - component: {fileID: 605120304}\n  - component: {fileID: 605120306}\n  - component: {fileID: 605120307}\n  m_Layer: 0\n  m_Name: Player\n  m_TagString: Player\n  m_Icon: {fileID: 0}\n  m_NavMeshLayer: 0\n  m_StaticEditorFlags: 0\n  m_IsActive: 1
 GameObject:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
