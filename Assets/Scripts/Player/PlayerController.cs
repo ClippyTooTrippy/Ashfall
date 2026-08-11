@@ -182,12 +182,12 @@ namespace SoulsLike.Player
             }
             if (Input.GetMouseButtonDown(0))
             {
-                TryStartAttack(lightAttackDamage, lightAttackStaminaCost, lightAttackDuration);
+                TryStartAttack(lightAttackDamage, lightAttackStaminaCost, lightAttackDuration, false);
                 return;
             }
             if (Input.GetMouseButtonDown(1))
             {
-                TryStartAttack(heavyAttackDamage, heavyAttackStaminaCost, heavyAttackDuration);
+                TryStartAttack(heavyAttackDamage, heavyAttackStaminaCost, heavyAttackDuration, true);
                 return;
             }
         }
@@ -251,7 +251,7 @@ namespace SoulsLike.Player
             return move;
         }
 
-        private void TryStartAttack(float damage, float staminaCost, float duration)
+        private void TryStartAttack(float damage, float staminaCost, float duration, bool isHeavy)
         {
             if (!stamina.TrySpend(staminaCost)) return;
 
@@ -262,7 +262,7 @@ namespace SoulsLike.Player
             attackDuration = duration;
 
             if (animator != null)
-                animator.SetTrigger("Attack");
+                animator.SetTrigger(isHeavy ? "HeavyAttack" : "Attack");
         }
 
         private float attackDuration;
